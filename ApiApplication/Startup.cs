@@ -1,6 +1,11 @@
+using System;
+using ApiApplication.Configuration;
 using ApiApplication.Database;
 using ApiApplication.Database.Repositories;
 using ApiApplication.Database.Repositories.Abstractions;
+using ApiApplication.Middleware;
+using ApiApplication.Services;
+using ApiApplication.Services.Abstractions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -8,6 +13,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using StackExchange.Redis;
 
 namespace ApiApplication
 {
@@ -20,36 +26,60 @@ namespace ApiApplication
 
         public IConfiguration Configuration { get; }
 
-        // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.Configure<ProvidedApiOptions>(Configuration.GetSection(ProvidedApiOptions.SectionName));
+
             services.AddTransient<IShowtimesRepository, ShowtimesRepository>();
             services.AddTransient<ITicketsRepository, TicketsRepository>();
             services.AddTransient<IAuditoriumsRepository, AuditoriumsRepository>();
 
-            services.AddDbContext<CinemaContext>(options =>
+            services.AddSingleton<IConnectionMultiplexer>(_ =>
+                ConnectionMultiplexer.Connect(Configuration.GetConnectionString("Redis")));
+            services.AddSingleton<ISeatHoldStore, RedisSeatHoldStore>();
+            services.AddTransient<IShowtimeService, ShowtimeService>();
+            services.AddTransient<IReservationService, ReservationService>();
+
+            services.AddSingleton<ApiClientGrpc>();
+            services.AddHttpClient<HttpMoviesApiClient>((_, client) =>
             {
-                options.UseInMemoryDatabase("CinemaDb")
+                var opts = Configuration.GetSection(ProvidedApiOptions.SectionName).Get<ProvidedApiOptions>()
+                    ?? new ProvidedApiOptions();
+                client.BaseAddress = new Uri(opts.HttpBaseUrl);
+                client.DefaultRequestHeaders.Add("X-Apikey", opts.ApiKey);
+                client.Timeout = TimeSpan.FromSeconds(15);
+            });
+            services.AddTransient<IMoviesApiClient, CachedMoviesApiClient>();
+
+            services.AddStackExchangeRedisCache(opts =>
+            {
+                opts.Configuration = Configuration.GetConnectionString("Redis");
+            });
+
+            services.AddDbContext<CinemaContext>(opts =>
+            {
+                opts.UseInMemoryDatabase("CinemaDb")
                     .EnableSensitiveDataLogging()
                     .ConfigureWarnings(b => b.Ignore(InMemoryEventId.TransactionIgnoredWarning));
             });
-            services.AddControllers();
 
-            services.AddHttpClient();
+            services.AddControllers();
+            services.AddSwaggerGen();
         }
 
-        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
+            // Catch all errors and return JSON only — never expose stack traces
+            app.UseMiddleware<ExceptionMiddleware>();
+            app.UseMiddleware<RequestTimingMiddleware>();
+
             if (env.IsDevelopment())
             {
-                app.UseDeveloperExceptionPage();
+                app.UseSwagger();
+                app.UseSwaggerUI();
             }
 
-            app.UseHttpsRedirection();
-
             app.UseRouting();
-            app.UseAuthentication();
             app.UseAuthorization();
 
             app.UseEndpoints(endpoints =>
@@ -58,6 +88,6 @@ namespace ApiApplication
             });
 
             SampleData.Initialize(app);
-        }      
+        }
     }
 }

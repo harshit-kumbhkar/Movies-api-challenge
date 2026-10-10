@@ -21,30 +21,31 @@ namespace ApiApplication.Database.Repositories
 
         public async Task<ShowtimeEntity> GetWithMoviesByIdAsync(int id, CancellationToken cancel)
         {
-            return await _context.Showtimes
-                .Include(x => x.Movie)
-                .FirstOrDefaultAsync(x => x.Id == id, cancel);
+            return await EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                _context.Showtimes.Include(x => x.Movie),
+                x => x.Id == id,
+                cancel);
         }
 
         public async Task<ShowtimeEntity> GetWithTicketsByIdAsync(int id, CancellationToken cancel)
         {
-            return await _context.Showtimes
-                .Include(x => x.Tickets)
-                .FirstOrDefaultAsync(x => x.Id == id, cancel);
+            return await EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                _context.Showtimes.Include(x => x.Tickets),
+                x => x.Id == id,
+                cancel);
         }
 
         public async Task<IEnumerable<ShowtimeEntity>> GetAllAsync(Expression<Func<ShowtimeEntity, bool>> filter, CancellationToken cancel)
         {
             if (filter == null)
             {
-                return await _context.Showtimes
-                .Include(x => x.Movie)
-                .ToListAsync(cancel);
+                return await EntityFrameworkQueryableExtensions.ToListAsync(
+                    _context.Showtimes.Include(x => x.Movie),
+                    cancel);
             }
-            return await _context.Showtimes
-                .Include(x => x.Movie)
-                .Where(filter)
-                .ToListAsync(cancel);
+            return await EntityFrameworkQueryableExtensions.ToListAsync(
+                _context.Showtimes.Include(x => x.Movie).Where(filter),
+                cancel);
         }
 
         public async Task<ShowtimeEntity> CreateShowtime(ShowtimeEntity showtimeEntity, CancellationToken cancel)

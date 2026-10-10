@@ -4,11 +4,16 @@ services:
     ports:
       - "7172:80"
       - "7443:443"
-    environment:      
+    environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=https://+:443;http://+:80
       - ASPNETCORE_Kestrel__Certificates__Default__Password=password
       - ASPNETCORE_Kestrel__Certificates__Default__Path=/app/aspnetapp.pfx
+      # Disable intentional random HTTP failures (FailureMiddleware)
+      - FailurePercentage=0
+    volumes:
+      # Image ships DB as amovies-db.json but app loads movies-db.json
+      - ./provided-api/movies-db.json:/app/movies-db.json:ro
   cache:
     image: "redis"
     restart: unless-stopped

@@ -17,9 +17,10 @@ namespace ApiApplication.Database.Repositories
 
         public async Task<AuditoriumEntity> GetAsync(int auditoriumId, CancellationToken cancel)
         {
-            return await _context.Auditoriums
-                .Include(x => x.Seats)
-                .FirstOrDefaultAsync(x => x.Id == auditoriumId, cancel);
+            return await EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                _context.Auditoriums.Include(x => x.Seats),
+                x => x.Id == auditoriumId,
+                cancel);
         }
     }
 }

@@ -8,16 +8,16 @@
     "ApiApplication": {
       "commandName": "Project",
       "launchBrowser": true,
-      "launchUrl": "showtime",
+      "launchUrl": "swagger",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "applicationUrl": "https://localhost:7629;http://localhost:7628"
+      "applicationUrl": "http://localhost:7628"
     },
     "Docker": {
       "commandName": "Docker",
       "launchBrowser": true,
-      "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}/showtime",
+      "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}/swagger",
       "publishAllPorts": true,
       "useSSL": true
     }
