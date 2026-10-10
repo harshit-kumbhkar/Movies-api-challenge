@@ -1,0 +1,8 @@
+is_global = true
+build_property.RootNamespace = ApiApplication
+build_property.ProjectDir = /Users/apple/Downloads/Movies-api-challenge.1.0.0 2/ApiApplication/
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.CsWinRTUseWindowsUIXamlProjections = false
+build_property.EffectiveAnalysisLevelStyle = 
+build_property.EnableCodeStyleSeverity = 
