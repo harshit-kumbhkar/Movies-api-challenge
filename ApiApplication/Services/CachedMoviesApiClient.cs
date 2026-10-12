@@ -50,7 +50,7 @@ namespace ApiApplication.Services
                 _log.LogWarning(ex, "HTTP lookup failed for movie {Id}, trying gRPC", movieId);
             }
 
-            if (IsGrpcConfigured())
+            if (_grpc.IsConfigured)
             {
                 try
                 {
@@ -86,24 +86,6 @@ namespace ApiApplication.Services
             throw new InvalidOperationException(
                 $"We couldn't load movie {movieId} right now — please try again",
                 lastErr);
-        }
-
-        private bool IsGrpcConfigured()
-        {
-            var addr = _opts.GrpcAddress;
-            if (string.IsNullOrWhiteSpace(addr))
-            {
-                return false;
-            }
-
-            if (addr.Contains("unused", StringComparison.OrdinalIgnoreCase) ||
-                addr.Contains("localhost", StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            return Uri.TryCreate(addr, UriKind.Absolute, out var uri) &&
-                   (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
         }
 
         private async Task TryCacheAsync(string movieId, ProvidedMovie movie, CancellationToken cancel)
