@@ -34,8 +34,11 @@ namespace ApiApplication
             services.AddTransient<ITicketsRepository, TicketsRepository>();
             services.AddTransient<IAuditoriumsRepository, AuditoriumsRepository>();
 
+            var redisConn = RedisConfig.ResolveConnectionString(Configuration);
+            var redisOpts = RedisConfig.Create(redisConn);
+
             services.AddSingleton<IConnectionMultiplexer>(_ =>
-                ConnectionMultiplexer.Connect(Configuration.GetConnectionString("Redis")));
+                ConnectionMultiplexer.Connect(redisOpts));
             services.AddSingleton<ISeatHoldStore, RedisSeatHoldStore>();
             services.AddTransient<IShowtimeService, ShowtimeService>();
             services.AddTransient<IReservationService, ReservationService>();
@@ -45,15 +48,15 @@ namespace ApiApplication
             {
                 var opts = Configuration.GetSection(ProvidedApiOptions.SectionName).Get<ProvidedApiOptions>()
                     ?? new ProvidedApiOptions();
-                client.BaseAddress = new Uri(opts.HttpBaseUrl);
+                client.BaseAddress = new Uri(opts.HttpBaseUrl.TrimEnd('/') + "/");
                 client.DefaultRequestHeaders.Add("X-Apikey", opts.ApiKey);
-                client.Timeout = TimeSpan.FromSeconds(15);
+                client.Timeout = TimeSpan.FromSeconds(30);
             });
             services.AddTransient<IMoviesApiClient, CachedMoviesApiClient>();
 
             services.AddStackExchangeRedisCache(opts =>
             {
-                opts.Configuration = Configuration.GetConnectionString("Redis");
+                opts.ConfigurationOptions = redisOpts;
             });
 
             services.AddDbContext<CinemaContext>(opts =>
