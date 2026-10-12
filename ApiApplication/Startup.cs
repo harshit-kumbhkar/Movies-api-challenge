@@ -73,11 +73,9 @@ namespace ApiApplication
             app.UseMiddleware<ExceptionMiddleware>();
             app.UseMiddleware<RequestTimingMiddleware>();
 
-            if (env.IsDevelopment())
-            {
-                app.UseSwagger();
-                app.UseSwaggerUI();
-            }
+            // Swagger enabled so Railway / local demos can open /swagger
+            app.UseSwagger();
+            app.UseSwaggerUI();
 
             app.UseRouting();
             app.UseAuthorization();
