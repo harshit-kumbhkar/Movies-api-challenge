@@ -37,39 +37,50 @@ namespace ApiApplication.Services
         {
             Exception lastErr = null;
 
-            try
-            {
-                var movie = await _grpc.GetByIdAsync(movieId, cancel);
-                await CacheAsync(movieId, movie, cancel);
-                return movie;
-            }
-            catch (Exception ex)
-            {
-                lastErr = ex;
-                _log.LogWarning(ex, "gRPC lookup failed for movie {Id}, trying HTTP", movieId);
-            }
-
+            // Prefer HTTP on Railway (public HTTPS URL works; gRPC often does not)
             try
             {
                 var movie = await _http.GetByIdAsync(movieId, cancel);
-                await CacheAsync(movieId, movie, cancel);
+                await TryCacheAsync(movieId, movie, cancel);
                 return movie;
             }
             catch (Exception ex)
             {
                 lastErr = ex;
-                _log.LogWarning(ex, "HTTP lookup failed for movie {Id}, trying Redis cache", movieId);
+                _log.LogWarning(ex, "HTTP lookup failed for movie {Id}, trying gRPC", movieId);
             }
 
-            var cached = await _cache.GetStringAsync(CacheKey(movieId), cancel);
-            if (!string.IsNullOrWhiteSpace(cached))
+            if (IsGrpcConfigured())
             {
-                var movie = JsonSerializer.Deserialize<ProvidedMovie>(cached);
-                if (movie != null)
+                try
                 {
-                    _log.LogInformation("Served movie {Id} from Redis cache", movieId);
+                    var movie = await _grpc.GetByIdAsync(movieId, cancel);
+                    await TryCacheAsync(movieId, movie, cancel);
                     return movie;
                 }
+                catch (Exception ex)
+                {
+                    lastErr = ex;
+                    _log.LogWarning(ex, "gRPC lookup failed for movie {Id}, trying Redis cache", movieId);
+                }
+            }
+
+            try
+            {
+                var cached = await _cache.GetStringAsync(CacheKey(movieId), cancel);
+                if (!string.IsNullOrWhiteSpace(cached))
+                {
+                    var movie = JsonSerializer.Deserialize<ProvidedMovie>(cached);
+                    if (movie != null)
+                    {
+                        _log.LogInformation("Served movie {Id} from Redis cache", movieId);
+                        return movie;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Redis cache read failed for movie {Id}", movieId);
             }
 
             throw new InvalidOperationException(
@@ -77,19 +88,42 @@ namespace ApiApplication.Services
                 lastErr);
         }
 
-        private async Task CacheAsync(string movieId, ProvidedMovie movie, CancellationToken cancel)
+        private bool IsGrpcConfigured()
         {
-            var payload = JsonSerializer.Serialize(movie);
-            var opts = new DistributedCacheEntryOptions
+            var addr = _opts.GrpcAddress;
+            if (string.IsNullOrWhiteSpace(addr))
             {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(_opts.CacheExpirationMinutes)
-            };
+                return false;
+            }
 
-            await _cache.SetStringAsync(CacheKey(movieId), payload, opts, cancel);
+            if (addr.Contains("unused", StringComparison.OrdinalIgnoreCase) ||
+                addr.Contains("localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return Uri.TryCreate(addr, UriKind.Absolute, out var uri) &&
+                   (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+        }
+
+        private async Task TryCacheAsync(string movieId, ProvidedMovie movie, CancellationToken cancel)
+        {
+            try
+            {
+                var payload = JsonSerializer.Serialize(movie);
+                var opts = new DistributedCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(_opts.CacheExpirationMinutes)
+                };
+                await _cache.SetStringAsync(CacheKey(movieId), payload, opts, cancel);
+            }
+            catch (Exception ex)
+            {
+                // Movie was fetched successfully — don't fail the request if Redis is down
+                _log.LogWarning(ex, "Redis cache write failed for movie {Id}", movieId);
+            }
         }
 
         private static string CacheKey(string movieId) => $"provided-movie:{movieId}";
-
     }
-
 }
